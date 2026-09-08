@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Copas Fora Familiar</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background-color: #2e7d32; color: white; text-align: center; margin: 0; padding: 20px; }
+    #login-box, #game-box { background: rgba(0,0,0,0.4); padding: 20px; border-radius: 10px; display: inline-block; }
+    #game-box { display: none; width: 80%; }
+    .card { display: inline-block; background: white; color: black; padding: 15px; margin: 5px; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    .card.H, .card.D { color: red; }
+    #scoreboard { background: #1b5e20; padding: 10px; border-radius: 5px; margin-bottom: 20px; }
+    #table { height: 120px; border: 2px dashed white; border-radius: 10px; margin: 20px 0; padding: 10px; }
+  </style>
+</head>
+<body>
+
+  <h1>Copas Fora Online</h1>
+
+  <div id="login-box">
+    <h3>Entrar na Sala</h3>
+    <input type="text" id="username" placeholder="Seu Nome"><br><br>
+    <label>Quantidade de Jogadores (Apenas primeiro jogador define):</label><br>
+    <select id="numPlayers">
+      <option value="4">4 Jogadores (10 cartas cada)</option>
+      <option value="5">5 Jogadores (8 cartas cada)</option>
+    </select><br><br>
+    <button onclick="join()">Entrar no Jogo</button>
+  </div>
+
+  <div id="game-box">
+    <div id="scoreboard">
+      <h3>Placar Ao Vivo</h3>
+      <div id="scores"></div>
+    </div>
+
+    <h3>Mesa</h3>
+    <div id="table"></div>
+
+    <h3 id="turn-info">Aguardando jogadores...</h3>
+
+    <h3>Sua Mão</h3>
+    <div id="hand"></div>
+  </div>
+
+  <script>
+    const socket = io();
+    let myName = '';
+
+    function join() {
+      myName = document.getElementById('username').value;
+      const numPlayers = document.getElementById('numPlayers').value;
+      if (!myName) return alert('Digite seu nome!');
+
+      socket.emit('joinGame', { name: myName, numPlayers });
+      document.getElementById('login-box').style.display = 'none';
+      document.getElementById('game-box').style.display = 'inline-block';
+    }
+
+    socket.on('updateState', (state) => {
+      // Atualizar Placar
+      let scoreHtml = '<strong>Pontuação Total:</strong><br>';
+      for (let p in state.scores) {
+        scoreHtml += `${p}: ${state.scores[p]} pts | `;
+      }
+      document.getElementById('scores').innerHTML = scoreHtml;
+
+      // Vez
+      if (state.gameStarted) {
+        const currentPlayer = state.players[state.currentTurn];
+        document.getElementById('turn-info').innerText = `Vez de: ${currentPlayer.name}`;
+      }
+
+      // Mesa
+      let tableHtml = '';
+      state.trickCards.forEach(tc => {
+        tableHtml += `<div class="card ${tc.card.suit}">${tc.card.value} ${getSuitSymbol(tc.card.suit)} (${tc.playerName})</div>`;
+      });
+      document.getElementById('table').innerHTML = tableHtml;
+
+      // Mão do Jogador
+      const me = state.players.find(p => p.name === myName);
+      if (me) {
+        let handHtml = '';
+        me.hand.forEach((card, index) => {
+          handHtml += `<div class="card ${card.suit}" onclick="playCard(${index})">${card.value} ${getSuitSymbol(card.suit)}</div>`;
+        });
+        document.getElementById('hand').innerHTML = handHtml;
+      }
+    });
+
+    socket.on('errorMessage', (msg) => alert(msg));
+
+    function playCard(index) {
+      socket.emit('playCard', index);
+    }
+
+    function getSuitSymbol(suit) {
+      const symbols = { 'S': '♠', 'H': '♥', 'D': '♦', 'C': '♣' };
+      return symbols[suit] || suit;
+    }
+  </script>
+</body>
+</html>
